@@ -9,13 +9,20 @@ Plain HTML + JS + Canvas 2D. No build step, no framework, no dependencies.
 
 | gate | deliverable | state |
 |------|-------------|-------|
-| 1 | File structure and module contracts — `docs/ARCHITECTURE.md` | awaiting sign-off |
-| 2 | `gamepad-test.html` — verify on the real cabinet | awaiting cabinet test |
-| 3 | Visual design plan — `docs/DESIGN.md` | awaiting direction choice |
-| 4 | Shared systems + Tug of War, placeholder visuals | not started |
-| 5 | Tug of War, final visuals + audio | not started |
+| 1 | File structure and module contracts — `docs/ARCHITECTURE.md` | approved |
+| 2 | `gamepad-test.html` — verify on the real cabinet | built; cabinet check pending |
+| 3 | Visual design plan — `docs/DESIGN.md` | approved: Enamel Sign |
+| 4 | Shared systems + Tug of War, keyboard-playable | done |
+| 5 | Tug of War, final visuals + audio | done, awaiting play test |
 | 6 | Auction Blitz | not started |
 | 7 | Bloom | not started |
+
+## Playing Tug of War on a keyboard
+
+1. Serve the folder (below) and open it. Press **Q** to join as P1, **,** (comma) as P2, **U** as P3, **Numpad 7** as P4.
+2. **Left/right** on your keys cycles cup size. **Up/down** picks a game. **E** (P1's action) starts.
+3. Hold your **drink** key to pull. Hold your **action** key to brace. When you're dry you brace automatically, harder.
+4. TOP UP: tap action to go into the next round as you are, hold it to refill. **Esc** pauses from anywhere.
 
 ## Running
 
