@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cabinet gamepad test</title>
+<style>
+  :root {
+    --bg: #14181c;
+    --panel: #1e242a;
+    --line: #333c45;
+    --text: #e8ecef;
+    --muted: #8a96a3;
+    --lit: #ffd23f;
+    --lit-text: #14181c;
+    --ok: #19d3a2;
+    --warn: #ff9f1c;
+    --err: #ff4d2e;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px 24px 60px;
+    background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+  h1 { font-size: 28px; margin: 0 0 4px; }
+  h2 { font-size: 20px; margin: 0 0 12px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .status { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
+  .pill { padding: 4px 12px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-family: var(--mono); }
+  .pill.ok { border-color: var(--ok); color: var(--ok); }
+  .pill.warn { border-color: var(--warn); color: var(--warn); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; margin-bottom: 18px; }
+  .pads { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 14px; }
+  .pad { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .pad header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 8px; }
+  .pad .idx { font-size: 24px; font-weight: 800; }
+  .pad .id { font-family: var(--mono); font-size: 12px; color: var(--muted); word-break: break-all; }
+  .pad .meta { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .btn {
+    width: 46px; height: 46px; border-radius: 6px; border: 2px solid var(--line);
+    display: grid; place-items: center; font-family: var(--mono); font-weight: 700; font-size: 16px;
+    color: var(--muted); position: relative; transition: background 40ms;
+  }
+  .btn.lit { background: var(--lit); color: var(--lit-text); border-color: var(--lit); }
+  .btn .v { position: absolute; bottom: 1px; right: 3px; font-size: 9px; font-weight: 400; opacity: .7; }
+  .axes { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 10px; align-items: center; font-family: var(--mono); font-size: 13px; }
+  .axbar { height: 14px; background: var(--line); border-radius: 3px; position: relative; overflow: hidden; }
+  .axbar .c { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); }
+  .axbar .f { position: absolute; top: 0; bottom: 0; background: var(--lit); }
+  .live { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .act {
+    padding: 6px 10px; border-radius: 6px; border: 2px solid var(--line); font-weight: 800; font-size: 13px;
+    color: var(--muted); font-family: var(--mono);
+  }
+  .act.lit { background: var(--ok); color: var(--lit-text); border-color: var(--ok); }
+  .act.unbound { border-style: dashed; opacity: .5; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  button, select {
+    font: inherit; font-weight: 700; padding: 10px 16px; border-radius: 6px; border: 1px solid var(--line);
+    background: #2b333b; color: var(--text); cursor: pointer;
+  }
+  button.primary { background: var(--lit); color: var(--lit-text); border-color: var(--lit); }
+  button.danger { border-color: var(--err); color: var(--err); background: transparent; }
+  button:disabled { opacity: .4; cursor: default; }
+  label.chk { display: inline-flex; gap: 8px; align-items: center; color: var(--muted); }
+  #bindstage { display: none; padding: 20px; border: 2px dashed var(--lit); border-radius: 10px; text-align: center; margin-top: 12px; }
+  #bindstage.on { display: block; }
+  #bindprompt { font-size: 44px; font-weight: 900; margin: 6px 0; }
+  #bindhint { color: var(--muted); font-size: 18px; }
+  #bindgot { font-family: var(--mono); font-size: 20px; color: var(--ok); min-height: 28px; margin-top: 8px; }
+  .steps { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 10px 0 0; }
+  .step { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .step.done { border-color: var(--ok); color: var(--ok); }
+  .step.cur { border-color: var(--lit); color: var(--lit); }
+  table { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.key { word-break: break-all; max-width: 340px; }
+  textarea { width: 100%; min-height: 140px; font-family: var(--mono); font-size: 12px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
+  .muted { color: var(--muted); }
+  code { font-family: var(--mono); background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+  .empty { color: var(--muted); padding: 20px; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<h1>Cabinet gamepad test</h1>
+<p class="sub">Every connected pad, every button index, live axes, and a binding flow that saves to <code>localStorage</code>. No game code is loaded here.</p>
+
+<div class="status">
+  <span class="pill" id="count">0 gamepads</span>
+  <span class="pill warn" id="wake">Press any button on each stick to wake it up</span>
+  <span class="pill" id="fps">— fps</span>
+</div>
+
+<section>
+  <h2>Connected gamepads</h2>
+  <div class="pads" id="pads"></div>
+  <div class="empty" id="nopads">Nothing yet. Browsers hide gamepads until a button is pressed. Chrome and Firefox both work; Safari is untested.</div>
+</section>
+
+<section>
+  <h2>Bind a stick</h2>
+  <div class="row">
+    <select id="bindpad"></select>
+    <label class="chk"><input type="checkbox" id="byindex"> bind this stick only (by index), not every stick with this id</label>
+    <button class="primary" id="startbind">Start binding</button>
+    <button id="cancelbind" disabled>Cancel</button>
+  </div>
+  <p class="muted" style="margin:0">Press the button when asked. For directions, push the stick. Anything that changes from rest counts: a button, an axis, or a hat. Press <b>Skip</b> to leave an action unbound.</p>
+  <div id="bindstage">
+    <div id="bindhint">Press the button you want for</div>
+    <div id="bindprompt">DRINK</div>
+    <div id="bindgot"></div>
+    <div class="steps" id="steps"></div>
+    <div class="row" style="justify-content:center; margin-top:14px">
+      <button id="skipbind">Skip this one</button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Saved mappings</h2>
+  <p class="muted" style="margin-top:0">Stored under <code>cabinet.gamepadMappings.v1</code>. The game's <code>input.js</code> reads exactly this. Resolution order: <b>by index</b> → <b>by id</b> → browser "standard" layout if the pad reports one.</p>
+  <div id="mappings"></div>
+  <div class="row" style="margin-top:12px">
+    <button id="export">Show JSON</button>
+    <button id="import">Apply pasted JSON</button>
+    <button class="danger" id="clear">Delete all mappings</button>
+  </div>
+  <textarea id="json" placeholder="Click Show JSON to export, or paste a mapping file here and click Apply."></textarea>
+</section>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---- constants ---------------------------------------------------------
+  const STORAGE_KEY = 'cabinet.gamepadMappings.v1';
+  const AXIS_THRESHOLD = 0.5;      // deflection from rest that counts as "pushed" (analog / digital-as-analog sticks)
+  const HAT_TOLERANCE = 0.35;      // how close a hat axis has to be to the captured value to count
+  const SETTLE_MS = 350;           // wait after each capture so the release doesn't register as the next input
+  const ACTIONS = [
+    { key: 'drink',  label: 'DRINK',  hint: 'Press the button you want for' },
+    { key: 'action', label: 'ACTION', hint: 'Press the button you want for' },
+    { key: 'pause',  label: 'PAUSE',  hint: 'Press the button you want for' },
+    { key: 'up',     label: 'UP',     hint: 'Push the stick', dir: true },
+    { key: 'down',   label: 'DOWN',   hint: 'Push the stick', dir: true },
+    { key: 'left',   label: 'LEFT',   hint: 'Push the stick', dir: true },
+    { key: 'right',  label: 'RIGHT',  hint: 'Push the stick', dir: true },
+  ];
+  // W3C "standard" layout fallback, only used when gp.mapping === 'standard'
+  const STANDARD = {
+    drink:  { type: 'button', index: 0 },
+    action: { type: 'button', index: 1 },
+    pause:  { type: 'button', index: 9 },
+    up:     { type: 'button', index: 12 },
+    down:   { type: 'button', index: 13 },
+    left:   { type: 'button', index: 14 },
+    right:  { type: 'button', index: 15 },
+  };
+
+  // ---- storage -----------------------------------------------------------
+  function loadStore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return { version: 1, byId: {}, byIndex: {} };
+      const s = JSON.parse(raw);
+      return { version: 1, byId: s.byId || {}, byIndex: s.byIndex || {} };
+    } catch (e) {
+      return { version: 1, byId: {}, byIndex: {} };
+    }
+  }
+  function saveStore(s) { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+  let store = loadStore();
+
+  function resolveMapping(gp) {
+    if (store.byIndex[gp.index]) return { source: 'index ' + gp.index, map: store.byIndex[gp.index].actions };
+    if (store.byId[gp.id]) return { source: 'id', map: store.byId[gp.id].actions };
+    if (gp.mapping === 'standard') return { source: 'standard', map: STANDARD };
+    return { source: null, map: null };
+  }
+
+  // The runtime rule. input.js will use the same function.
+  function bindingActive(gp, b) {
+    if (!b) return false;
+    if (b.type === 'button') {
+      const btn = gp.buttons[b.index];
+      return !!btn && (btn.pressed || btn.value > 0.5);
+    }
+    if (b.type === 'axis') {
+      const v = gp.axes[b.index];
+      if (v === undefined) return false;
+      const rest = b.rest ?? 0;
+      if (Math.abs(rest) <= 0.2) {
+        // centred analog stick or digital-as-analog: sign + deflection
+        return b.sign * (v - rest) >= AXIS_THRESHOLD;
+      }
+      // hat-style axis with an odd rest value: match the captured value
+      return Math.abs(v - b.value) <= HAT_TOLERANCE;
+    }
+    return false;
+  }
+
+  // ---- gamepad polling ---------------------------------------------------
+  function pads() {
+    const list = navigator.getGamepads ? navigator.getGamepads() : [];
+    const out = [];
+    for (let i = 0; i < list.length; i++) if (list[i]) out.push(list[i]);
+    return out;
+  }
+
+  // ---- DOM: pads ---------------------------------------------------------
+  const padsEl = document.getElementById('pads');
+  const nopadsEl = document.getElementById('nopads');
+  const countEl = document.getElementById('count');
+  const wakeEl = document.getElementById('wake');
+  const fpsEl = document.getElementById('fps');
+  const padViews = new Map();   // index -> { root, btns[], axes[], acts{} , sig }
+
+  function buildPadView(gp) {
+    const root = document.createElement('div');
+    root.className = 'pad';
+    root.innerHTML = `
+      <header><div><span class="idx">#${gp.index}</span> <span class="meta" data-src></span></div>
+      <div class="meta">${gp.buttons.length} buttons · ${gp.axes.length} axes · mapping "${gp.mapping || 'none'}"</div></header>
+      <div class="id">${escapeHtml(gp.id)}</div>
+      <div class="buttons" data-buttons></div>
+      <div class="axes" data-axes></div>
+      <div class="live" data-live></div>`;
+    const bwrap = root.querySelector('[data-buttons]');
+    const btns = gp.buttons.map((_, i) => {
+      const d = document.createElement('div');
+      d.className = 'btn'; d.innerHTML = `${i}<span class="v"></span>`;
+      bwrap.appendChild(d);
+      return { el: d, v: d.querySelector('.v'), lit: false, val: '' };
+    });
+    const awrap = root.querySelector('[data-axes]');
+    const axes = gp.axes.map((_, i) => {
+      const lab = document.createElement('div'); lab.textContent = 'axis ' + i;
+      const bar = document.createElement('div'); bar.className = 'axbar'; bar.innerHTML = '<div class="c"></div><div class="f"></div>';
+      const num = document.createElement('div'); num.textContent = '0.00';
+      awrap.append(lab, bar, num);
+      return { f: bar.querySelector('.f'), num, last: null };
+    });
+    const lwrap = root.querySelector('[data-live]');
+    const acts = {};
+    for (const a of ACTIONS) {
+      const d = document.createElement('div'); d.className = 'act'; d.textContent = a.label;
+      lwrap.appendChild(d); acts[a.key] = { el: d, lit: null, unbound: null };
+    }
+    const view = { root, btns, axes, acts, src: root.querySelector('[data-src]'), sig: gp.buttons.length + ':' + gp.axes.length };
+    padsEl.appendChild(root);
+    return view;
+  }
+
+  function updatePadView(gp) {
+    let v = padViews.get(gp.index);
+    const sig = gp.buttons.length + ':' + gp.axes.length;
+    if (!v || v.sig !== sig) {
+      if (v) v.root.remove();
+      v = buildPadView(gp);
+      padViews.set(gp.index, v);
+    }
+    for (let i = 0; i < gp.buttons.length; i++) {
+      const b = gp.buttons[i], lit = b.pressed || b.value > 0.5;
+      const bv = v.btns[i];
+      if (bv.lit !== lit) { bv.lit = lit; bv.el.classList.toggle('lit', lit); }
+      const val = (b.value > 0 && b.value < 1) ? b.value.toFixed(2) : '';
+      if (bv.val !== val) { bv.val = val; bv.v.textContent = val; }
+    }
+    for (let i = 0; i < gp.axes.length; i++) {
+      const a = gp.axes[i], av = v.axes[i];
+      const r = Math.round(a * 100) / 100;
+      if (av.last !== r) {
+        av.last = r;
+        av.num.textContent = (r >= 0 ? '+' : '') + r.toFixed(2);
+        const pct = Math.max(-1, Math.min(1, a)) * 50;
+        if (pct >= 0) { av.f.style.left = '50%'; av.f.style.width = pct + '%'; }
+        else { av.f.style.left = (50 + pct) + '%'; av.f.style.width = (-pct) + '%'; }
+      }
+    }
+    const { source, map } = resolveMapping(gp);
+    const srcText = source ? `mapped by ${source}` : 'unmapped';
+    if (v.src.textContent !== srcText) v.src.textContent = srcText;
+    for (const a of ACTIONS) {
+      const av = v.acts[a.key];
+      const b = map ? map[a.key] : null;
+      const unbound = !b, lit = !!b && bindingActive(gp, b);
+      if (av.unbound !== unbound) { av.unbound = unbound; av.el.classList.toggle('unbound', unbound); }
+      if (av.lit !== lit) { av.lit = lit; av.el.classList.toggle('lit', lit); }
+      const txt = a.label + (b ? ' ' + describe(b) : '');
+      if (av.el.textContent !== txt) av.el.textContent = txt;
+    }
+  }
+
+  function describe(b) {
+    if (!b) return '—';
+    if (b.type === 'button') return 'btn ' + b.index;
+    if (b.type === 'axis') return 'axis ' + b.index + (Math.abs(b.rest ?? 0) <= 0.2 ? (b.sign > 0 ? ' +' : ' −') : ' @' + b.value.toFixed(2));
+    return '?';
+  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+  // ---- binding flow ------------------------------------------------------
+  const bindPadSel = document.getElementById('bindpad');
+  const byIndexChk = document.getElementById('byindex');
+  const startBtn = document.getElementById('startbind');
+  const cancelBtn = document.getElementById('cancelbind');
+  const skipBtn = document.getElementById('skipbind');
+  const stage = document.getElementById('bindstage');
+  const promptEl = document.getElementById('bindprompt');
+  const hintEl = document.getElementById('bindhint');
+  const gotEl = document.getElementById('bindgot');
+  const stepsEl = document.getElementById('steps');
+
+  let bind = null;   // { padIndex, byIndex, step, baseline, settleUntil, actions }
+
+  function refreshPadSelect(list) {
+    const cur = bindPadSel.value;
+    const opts = list.map(gp => `<option value="${gp.index}">#${gp.index} — ${escapeHtml(gp.id.slice(0, 48))}</option>`).join('');
+    if (bindPadSel.innerHTML !== opts) {
+      bindPadSel.innerHTML = opts;
+      if ([...bindPadSel.options].some(o => o.value === cur)) bindPadSel.value = cur;
+    }
+    startBtn.disabled = list.length === 0 || !!bind;
+  }
+
+  function snapshot(gp) {
+    return { buttons: gp.buttons.map(b => b.pressed || b.value > 0.5), axes: gp.axes.slice() };
+  }
+
+  function startBind() {
+    const idx = Number(bindPadSel.value);
+    const gp = pads().find(p => p.index === idx);
+    if (!gp) return;
+    bind = { padIndex: idx, padId: gp.id, byIndex: byIndexChk.checked, step: 0, baseline: null, settleUntil: performance.now() + SETTLE_MS, actions: {} };
+    stage.classList.add('on');
+    cancelBtn.disabled = false; startBtn.disabled = true;
+    gotEl.textContent = '';
+    renderStep();
+  }
+
+  function endBind(save) {
+    if (save && bind) {
+      const entry = { id: bind.padId, capturedAt: new Date().toISOString(), actions: bind.actions };
+      if (bind.byIndex) store.byIndex[bind.padIndex] = entry; else store.byId[bind.padId] = entry;
+      saveStore(store);
+      renderMappings();
+    }
+    bind = null;
+    stage.classList.remove('on');
+    cancelBtn.disabled = true; startBtn.disabled = false;
+  }
+
+  function renderStep() {
+    const a = ACTIONS[bind.step];
+    hintEl.textContent = a.hint;
+    promptEl.textContent = a.label;
+    stepsEl.innerHTML = ACTIONS.map((s, i) => {
+      const cls = i < bind.step ? 'done' : i === bind.step ? 'cur' : '';
+      const got = bind.actions[s.key];
+      return `<span class="step ${cls}">${s.label}${i < bind.step ? ': ' + (got ? describe(got) : 'skipped') : ''}</span>`;
+    }).join('');
+  }
+
+  function advance(captured) {
+    const a = ACTIONS[bind.step];
+    if (captured) bind.actions[a.key] = captured;
+    gotEl.textContent = captured ? `${a.label} = ${describe(captured)}` : `${a.label} skipped`;
+    bind.step++;
+    bind.baseline = null;
+    bind.settleUntil = performance.now() + SETTLE_MS;
+    if (bind.step >= ACTIONS.length) {
+      gotEl.textContent = 'Saved. Check the live row on pad #' + bind.padIndex + ' above.';
+      endBind(true);
+      return;
+    }
+    renderStep();
+  }
+
+  function detect(gp) {
+    const now = performance.now();
+    if (now < bind.settleUntil) return;
+    if (!bind.baseline) {
+      // baseline is taken only when nothing is held, so a slow release can't become the rest state
+      const s = snapshot(gp);
+      bind.baseline = s;
+      return;
+    }
+    const base = bind.baseline;
+    for (let i = 0; i < gp.buttons.length; i++) {
+      const pressed = gp.buttons[i].pressed || gp.buttons[i].value > 0.5;
+      if (pressed && !base.buttons[i]) return advance({ type: 'button', index: i });
+    }
+    for (let i = 0; i < gp.axes.length; i++) {
+      const rest = base.axes[i], v = gp.axes[i], d = v - rest;
+      if (Math.abs(d) >= AXIS_THRESHOLD) {
+        return advance({ type: 'axis', index: i, sign: d > 0 ? 1 : -1, value: Math.round(v * 1000) / 1000, rest: Math.round(rest * 1000) / 1000 });
+      }
+    }
+  }
+
+  startBtn.addEventListener('click', startBind);
+  cancelBtn.addEventListener('click', () => endBind(false));
+  skipBtn.addEventListener('click', () => { if (bind) advance(null); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && bind) endBind(false); });
+
+  // ---- mappings panel ----------------------------------------------------
+  const mappingsEl = document.getElementById('mappings');
+  const jsonEl = document.getElementById('json');
+
+  function renderMappings() {
+    const rows = [];
+    for (const [idx, e] of Object.entries(store.byIndex)) rows.push({ scope: 'index ' + idx, key: e.id, e, del: () => { delete store.byIndex[idx]; } });
+    for (const [id, e] of Object.entries(store.byId)) rows.push({ scope: 'id', key: id, e, del: () => { delete store.byId[id]; } });
+    if (!rows.length) { mappingsEl.innerHTML = '<div class="empty">No mappings saved yet.</div>'; return; }
+    const t = document.createElement('table');
+    t.innerHTML = `<thead><tr><th>scope</th><th>gamepad id</th>${ACTIONS.map(a => `<th>${a.label}</th>`).join('')}<th>captured</th><th></th></tr></thead>`;
+    const tb = document.createElement('tbody');
+    rows.forEach((r, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${r.scope}</td><td class="key">${escapeHtml(r.key)}</td>` +
+        ACTIONS.map(a => `<td>${describe(r.e.actions[a.key])}</td>`).join('') +
+        `<td>${(r.e.capturedAt || '').slice(0, 16).replace('T', ' ')}</td><td></td>`;
+      const del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete';
+      del.addEventListener('click', () => { r.del(); saveStore(store); renderMappings(); });
+      tr.lastElementChild.appendChild(del);
+      tb.appendChild(tr);
+    });
+    t.appendChild(tb);
+    mappingsEl.innerHTML = ''; mappingsEl.appendChild(t);
+  }
+
+  document.getElementById('export').addEventListener('click', () => { jsonEl.value = JSON.stringify(store, null, 2); jsonEl.select(); });
+  document.getElementById('import').addEventListener('click', () => {
+    try {
+      const s = JSON.parse(jsonEl.value);
+      if (!s || typeof s !== 'object') throw new Error('not an object');
+      store = { version: 1, byId: s.byId || {}, byIndex: s.byIndex || {} };
+      saveStore(store); renderMappings();
+      jsonEl.value = 'Applied.';
+    } catch (e) { jsonEl.value = 'Could not parse that: ' + e.message + '\n\n' + jsonEl.value; }
+  });
+  document.getElementById('clear').addEventListener('click', () => {
+    if (!confirm('Delete every saved mapping?')) return;
+    store = { version: 1, byId: {}, byIndex: {} }; saveStore(store); renderMappings();
+  });
+
+  // ---- main loop ---------------------------------------------------------
+  let frames = 0, fpsAt = performance.now();
+  window.addEventListener('gamepadconnected', e => console.log('connected', e.gamepad.index, e.gamepad.id));
+  window.addEventListener('gamepaddisconnected', e => console.log('disconnected', e.gamepad.index));
+
+  function loop() {
+    const list = pads();
+    const seen = new Set();
+    for (const gp of list) { seen.add(gp.index); updatePadView(gp); }
+    for (const [idx, v] of padViews) if (!seen.has(idx)) { v.root.remove(); padViews.delete(idx); }
+    nopadsEl.style.display = list.length ? 'none' : '';
+    countEl.textContent = list.length + (list.length === 1 ? ' gamepad' : ' gamepads');
+    wakeEl.style.display = list.length ? 'none' : '';
+    refreshPadSelect(list);
+
+    if (bind) {
+      const gp = list.find(p => p.index === bind.padIndex);
+      if (!gp) { gotEl.textContent = 'That pad disconnected.'; endBind(false); }
+      else detect(gp);
+    }
+
+    frames++;
+    const now = performance.now();
+    if (now - fpsAt >= 1000) { fpsEl.textContent = Math.round(frames * 1000 / (now - fpsAt)) + ' fps'; frames = 0; fpsAt = now; }
+    requestAnimationFrame(loop);
+  }
+
+  renderMappings();
+  requestAnimationFrame(loop);
+
+  // exposed for automated smoke tests only
+  window.__cabinetTest = { resolveMapping, bindingActive, STORAGE_KEY, ACTIONS };
+})();
+</script>
+</body>
+</html>
