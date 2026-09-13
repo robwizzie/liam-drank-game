@@ -312,9 +312,20 @@ export function playerMark(ctx, player, x, y, r);   // identity: colour + numera
 
 ---
 
-## Open questions for you (answer at this gate)
+## Decisions taken at gate 1 (approved)
 
-1. **Refill gesture in TOP UP** — I've specified *tap = ready as-is, hold = refill + ready*. Alternative: `action` = ready, `up` on the stick = refill. Which is more obvious to a drunk person on a stick?
-2. **Keyboard layouts** — the 4-slot table above is a proposal. Change anything now, it's one config block.
-3. **Mapping key** — mappings are stored per gamepad **id string** (all sticks with the same encoder share one binding), with a per-**index** override. If your encoders enumerate with identical ids and differ physically, use the override. Fine?
-4. **Teams in Tug of War** — auto-balanced by join order (odd slots left, even right)? Or by physical side of the cabinet (slots 0–3 left, 4–7 right)? Physical side seems right for a cabinet with people on both faces, but I don't know how your sticks are laid out.
+1. **Refill gesture in TOP UP**: tap `action` = ready as you are; hold `action` for `refillHoldSec` = refill and ready. The cup fills on screen while you hold, so an accidental short hold just reads as ready.
+2. **Keyboard layouts**: the 4-slot table above, in `config.input.keyboard`.
+3. **Mapping key**: per gamepad id string, with a per-index override from the test page's checkbox.
+4. **Tug of War teams**: alternate by join order (slot 0 left, 1 right, 2 left, ...). Change `teamOf()` in `games/tugofwar.js` if the cabinet's physical sides make a different rule obvious.
+
+## Gate 4 verdict: did the abstraction hold?
+
+Yes, with two additions that live entirely inside `drink.js` and `config.js`:
+
+- **Asymmetric rate smoothing.** The reported rate rises through a low-pass but falls fast (`rateReleaseSec`). Without it, a half-second pause between sips still read as continuous drinking, so Tug of War's fatigue punished burst sipping — the opposite of the intent. Any game with a sustained-flow penalty needs this, so it belongs in the layer, not the game.
+- **A rate floor** (`rateFloorMlPerSec`) so `isDrinking` flips cleanly instead of trailing off.
+
+Tug of War reads only `inputs[slot].drink.{effective, rate, isDry, isDrinking, remainingPct}` and never touched `input.js`. The `'drink'` action is unreachable from game code (the guard in `main.js` throws). Nothing in the game module knows whether the ml came from a button or a sensor. The flow-sensor backend can be dropped in by changing one import line.
+
+One thing to watch for Auction Blitz: it wants `total` per round, which is reset by `drink.beginRound()` — already there. Bloom wants per-frame ml deltas for growth; `rate * dt` gives that without a new field.

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cabinet</title>
+<style>
+  @font-face {
+    font-family: "Alfa Slab One";
+    src: url("src/fonts/alfa-slab-one.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+  }
+  html, body { margin: 0; padding: 0; background: #1A1614; overflow: hidden; height: 100%; }
+  canvas { display: block; }
+  /* force the font to load before the canvas needs it */
+  .preload { position: absolute; left: -9999px; top: -9999px; font-family: "Alfa Slab One"; }
+</style>
+</head>
+<body>
+<span class="preload">preload</span>
+<canvas id="game"></canvas>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
