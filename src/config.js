@@ -21,6 +21,18 @@ export default {
       { up: 'KeyI', down: 'KeyK', left: 'KeyJ', right: 'KeyL', drink: 'KeyU', action: 'KeyO' },
       { up: 'Numpad8', down: 'Numpad5', left: 'Numpad4', right: 'Numpad6', drink: 'Numpad7', action: 'Numpad9' },
     ],
+    test: {                 // laptop testing: one simple key set drives ONE player at a time. Turn OFF for the cabinet.
+      enabled: true,        // false = the four keyboard layouts above are the only keyboard input
+      toggleKeys: ['KeyT'], // flip test keys on/off at runtime; the cabinet layouts always keep working
+      driveKeys: ['Digit1', 'Digit2', 'Digit3', 'Digit4'],  // pick which player the test keys drive
+      map: {                // deliberately keys no cabinet layout uses, except the arrows (see below)
+        drink: 'Space', action: 'ShiftLeft',
+        up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight',
+      },
+      // The arrows collide with P2's cabinet layout. While test mode is on, a
+      // key in `map` only reaches the player being driven, so P2 keeps , and .
+      // but loses the arrows until you drive P2 or press the toggle key.
+    },
     standardMapping: {      // W3C "standard" layout fallback when a pad reports mapping === 'standard' and has no saved binding
       drink: { type: 'button', index: 0 },
       action: { type: 'button', index: 1 },
@@ -60,6 +72,20 @@ export default {
     names:   ['Vermilion', 'Sky', 'Yolk', 'Violet', 'Mint', 'Tangerine', 'Bubblegum', 'Ice'],
     shapes:  ['circle', 'square', 'triangle', 'diamond', 'hexagon', 'star', 'heart', 'ring'],
     keylinePx: 6,               // ink outline on every identity-coloured shape; thicker = chunkier silhouettes
+  },
+
+  debug: {                      // the on-screen test panel; invisible until you ask for it
+    toggleKeys: ['F1', 'Backquote'],  // show/hide the panel
+    panelW: 1040,               // px, logical; wide enough for a full drink row plus its buttons
+    rowH: 36,                   // px per row
+    pad: 22,                    // inner padding
+    rowFontPx: 24,              // row text; below the 28 px player-facing floor because nobody reads this from the couch
+    fpsSmoothingHz: 4,          // how fast the fps readout settles; higher = twitchier
+    btnW: 92,                   // px, the per-player FILL / EMPTY buttons
+    btnWideW: 148,              // px, the FILL ALL / EMPTY ALL pair; their labels don't fit btnW
+    btnH: 28,
+    btnFontPx: 18,
+    btnGap: 10,
   },
 
   rounds: {
@@ -136,6 +162,17 @@ export default {
         riseRate: 0.45,         // fatigue per second once past onset; higher = faster punishment
         recoverRate: 0.7,       // fatigue shed per second while not drinking; higher = shorter breather needed
         floor: 0.35,            // minimum force multiplier at full fatigue; 0 = chugging does nothing at all
+      },
+      drinkPose: {              // the cup each figure holds, and what happens when the drink button goes down
+        cupW: 46,               // px; wider = the cup reads from the back of the room, but crowds the torso
+        cupH: 60,
+        haloPx: 5,              // cream moat around the held cup so it separates from a same-coloured body
+        headClearPx: 9,         // gap between the cup and the head silhouette at a full sip; 0 = they overlap
+        raiseSec: 0.16,         // seconds for the cup to reach the mouth; higher = a lazier, more deliberate sip
+        headTiltDeg: 28,        // how far the head tips back at a full sip; higher = more of a chug
+        cupTiltDeg: 52,         // how far the cup tips toward the head at a full sip
+        gulpEverySec: 0.22,     // seconds between gulp droplets while drinking; lower = messier drinker
+        gulpCount: 2,           // droplets per gulp
       },
       figureSpacingPx: 150,     // gap between team-mates on the rope; compresses when the knot nears their post
       figureGripPx: 135,        // distance from the knot to the nearest figure

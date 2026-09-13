@@ -10,6 +10,7 @@ import * as fx from './fx.js';
 import * as audio from './audio.js';
 import * as ui from './ui.js';
 import * as launcher from './launcher.js';
+import * as debug from './debug.js';
 
 const T = config.theme;
 const el = document.getElementById('game');
@@ -78,6 +79,7 @@ function frame(now) {
     updatePauseMenu();
   }
   audio.update(dt);
+  debug.update(dt);   // outside the pause branch so the fps readout keeps ticking
 
   canvas.begin(ctx, T.ink);
   ctx.save();
@@ -87,6 +89,7 @@ function frame(now) {
   fx.render(ctx);
   ctx.restore();
   if (paused) renderPause(ctx);
+  debug.render(ctx);   // last, so it sits over the pause overlay too
   canvas.end(ctx);
 
   requestAnimationFrame(frame);

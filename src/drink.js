@@ -1,7 +1,9 @@
 // The drink interface every game reads. Owns cup volume, the diminishing
 // curve, rate smoothing and the dry clamp. The backend only reports ml.
 //
-// Swap the backend by changing this ONE import line:
+// TODAY the source is the cabinet's DRINK button: hold it and the cup pours.
+// There is no flow sensor yet, and nothing above this file knows the difference
+// — swap the source by changing this ONE import line:
 import backend from './drink-backends/button-hold.js';
 // import backend from './drink-backends/flow-sensor.js';
 
@@ -95,6 +97,19 @@ export function refill(slot) {
   const s = ensure(slot);
   const p = players.get(slot);
   s.remaining = p ? p.capacityMl : 0;
+  s._smoothRate = 0;
+  recompute(s);
+  s.rate = 0; s.effective = 0; s.isDrinking = false; s.justWentDry = false;
+}
+
+// Debug / tools only — the test panel's FILL and EMPTY buttons. Games and
+// rounds.js must go through refill() so the TOP UP rules stay the only way a
+// cup gets fuller during a match.
+export function setRemaining(slot, ml) {
+  const s = ensure(slot);
+  const p = players.get(slot);
+  const cap = p ? p.capacityMl : 0;
+  s.remaining = Math.max(0, Math.min(cap, ml));
   s._smoothRate = 0;
   recompute(s);
   s.rate = 0; s.effective = 0; s.isDrinking = false; s.justWentDry = false;

@@ -1,6 +1,10 @@
 // Tug of War. One rope, one knot, two sides. Drinking is the only way to pull.
 // Brace (hold ACTION) to resist at the cost of contributing no pull.
 // Dry players brace only, with a bonus: digging in.
+//
+// Every figure holds its cup in the free hand. Hold DRINK and the cup comes up,
+// the head tips back and the level drops — the button reads as a drink, not as
+// a bar moving somewhere else on screen.
 
 import config from '../config.js';
 import * as canvas from '../canvas.js';
@@ -33,7 +37,7 @@ export default {
       teams[p.team].push(p);
       roster.set(p.slot, {
         p, drink: null, dry: false, fatigue: 0, drinkTime: 0, pull: 0, brace: 0, bracing: false,
-        lean: 0, squash: 1, dustAt: 0, teamIndex: teams[p.team].length - 1,
+        lean: 0, squash: 1, sip: 0, gulpAt: 0, dustAt: 0, teamIndex: teams[p.team].length - 1,
       });
     });
     const L = teams.left.length, R = teams.right.length;
@@ -108,6 +112,19 @@ export default {
         st.dustAt = S.time;
         const pos = figureX(st);
         fx.burst(pos, groundY(), { count: Math.min(8, 2 + Math.round(Math.abs(rope.v) * 20)), color: T.slate, speed: 180, life: 0.45, size: 9, dir: -Math.PI / 2 - dir * 0.9, spread: 1.2, gravity: 900 });
+      }
+
+      // the cup rises to the mouth while the drink button is down, and drops when it isn't
+      const dp = cfg.drinkPose;
+      const drinking = !!(st.drink && st.drink.isDrinking);
+      st.sip += ((drinking ? 1 : 0) - st.sip) * (1 - Math.exp(-dt / dp.raiseSec));
+      if (drinking && st.sip > 0.6 && S.time - st.gulpAt > dp.gulpEverySec && !S.over) {
+        st.gulpAt = S.time;
+        const fxx = figureX(st);
+        const g = figureGeom(st, fxx, groundY());
+        const toKnot = (canvas.safe().cx + rope.p * ropeHalfWidth()) > fxx ? 1 : -1;
+        const r = g.toWorld(rimLocal(g, st, toKnot));
+        fx.burst(r.x, r.y, { count: dp.gulpCount, color: st.p.color, speed: 130, life: 0.4, size: 8, dir: Math.PI / 2, spread: 1.1 });
       }
     }
 
@@ -217,6 +234,17 @@ export default {
     audio.stopAllDrinkTones();
   },
 
+  // Read by debug.js when the test panel is open. Optional on any game module.
+  debugRows() {
+    if (!S) return [];
+    const rows = [...S.roster.values()].map(st => ({
+      slot: st.p.slot,
+      text: `fatigue ${st.fatigue.toFixed(2)}  pull ${st.pull.toFixed(1)}  brace ${st.brace.toFixed(1)}${st.bracing ? '  BRACING' : ''}`,
+    }));
+    rows.push({ text: `rope ${S.rope.p.toFixed(3)}  vel ${S.rope.v.toFixed(3)}  tension ${S.rope.tension.toFixed(1)}  handicap L${S.handicap.left.toFixed(2)} R${S.handicap.right.toFixed(2)}` });
+    return rows;
+  },
+
   matchSummary(board, playerList) {
     const pts = { left: 0, right: 0 };
     for (const b of board) { const p = playerList.find(q => q.slot === b.slot); if (p) pts[p.team] += b.points; }
@@ -258,22 +286,85 @@ function pip(ctx, x, y, filled) {
   ctx.lineWidth = 5; ctx.strokeStyle = T.ink; ctx.stroke();
 }
 
-function drawFigure(ctx, st, x, gY, ropeY, knotX) {
-  const p = st.p;
-  const toKnot = knotX > x ? 1 : -1;
+// Figure geometry, shared by the update pass (where particles need to know
+// where a mouth is) and the render pass. Local space: feet at (0,0), up is
+// negative y, before the lean rotation and brace squash are applied.
+function figureGeom(st, x, gY) {
   const isDry = !!st.dry;
   const lean = (st.lean * Math.PI) / 180;
   const sq = st.squash;
+  const hipY = isDry ? -34 : -62;
+  const torsoH = 74, torsoW = 64;
+  const neckY = hipY - torsoH;
+  const headY = neckY - 36;
+  const headR = 26;
+  const c = Math.cos(lean), s = Math.sin(lean);
+  return {
+    isDry, lean, sq, hipY, torsoH, torsoW, neckY, headY, headR,
+    toWorld(l) {
+      const sx = l.x / Math.sqrt(sq), sy = l.y * sq;
+      return { x: x + sx * c - sy * s, y: gY + sx * s + sy * c };
+    },
+  };
+}
+
+// How far the head has tipped back, in radians. Full sip = cfg.drinkPose.headTiltDeg.
+function headAngle(st, toKnot) {
+  return (-toKnot * cfg.drinkPose.headTiltDeg * Math.PI * st.sip) / 180;
+}
+
+// Where the cup is, in local space: down by the hip at rest, up BESIDE the head
+// mid-sip — beside it, never over it, so the identity shape stays readable and
+// the cup keeps its own silhouette against a same-coloured body.
+// The whole drinking pose falls out of this one lerp; the hand follows the cup.
+function cupCentreLocal(g, st, toKnot) {
+  const dp = cfg.drinkPose;
+  // a tipped cup is wider than its width: clear the head by its rotated extent,
+  // or the far corner swings back over the identity shape at full tilt
+  const a = cupAngle(st, toKnot);
+  const halfW = (dp.cupW * Math.abs(Math.cos(a)) + dp.cupH * Math.abs(Math.sin(a))) * 0.5;
+  const restX = -toKnot * (g.torsoW * 0.5 + dp.cupW * 0.62), restY = g.hipY - g.torsoH * 0.15;
+  const sipX = -toKnot * (g.headR + halfW + dp.headClearPx), sipY = g.headY + dp.cupH * 0.05;
+  const k = st.sip;
+  return { x: restX + (sipX - restX) * k, y: restY + (sipY - restY) * k };
+}
+
+// How far the cup has tipped toward the head. Sits on the far side of the body
+// from the rope, so a positive (clockwise) tip points the rim back at the face.
+function cupAngle(st, toKnot) {
+  return (toKnot * cfg.drinkPose.cupTiltDeg * Math.PI * st.sip) / 180;
+}
+
+// The rim — where the drink leaves the cup, and where gulp droplets come from.
+function rimLocal(g, st, toKnot) {
+  const c = cupCentreLocal(g, st, toKnot);
+  const a = cupAngle(st, toKnot);
+  const r = cfg.drinkPose.cupH * 0.5;
+  return { x: c.x + Math.sin(a) * r, y: c.y - Math.cos(a) * r };
+}
+
+// The gripping hand: at the base of the cup along the cup's own axis, so it
+// straddles the rim rather than floating inside the glass.
+function cupHandLocal(g, st, toKnot) {
+  const c = cupCentreLocal(g, st, toKnot);
+  const a = cupAngle(st, toKnot);
+  const lift = cfg.drinkPose.cupH * 0.5;
+  return { x: c.x - Math.sin(a) * lift, y: c.y + Math.cos(a) * lift };
+}
+
+function drawFigure(ctx, st, x, gY, ropeY, knotX) {
+  const p = st.p;
+  const d = st.drink;
+  const toKnot = knotX > x ? 1 : -1;
+  const g = figureGeom(st, x, gY);
+  const { isDry, sq, hipY, torsoH, torsoW, neckY, headY } = g;
+  const dp = cfg.drinkPose;
 
   ctx.save();
   ctx.translate(x, gY);
-  ctx.rotate(lean);
+  ctx.rotate(g.lean);
   ctx.scale(1 / Math.sqrt(sq), sq);
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-  const hipY = isDry ? -34 : -62;
-  const torsoH = 74, torsoW = 64;
-  const headY = hipY - torsoH - 36;
 
   // legs
   ctx.strokeStyle = T.ink; ctx.lineWidth = 16;
@@ -291,29 +382,46 @@ function drawFigure(ctx, st, x, gY, ropeY, knotX) {
 
   // torso
   ctx.fillStyle = p.color; ctx.strokeStyle = T.ink; ctx.lineWidth = config.players.keylinePx;
-  ui.roundRect(ctx, -torsoW / 2, hipY - torsoH, torsoW, torsoH, 14); ctx.fill(); ctx.stroke();
+  ui.roundRect(ctx, -torsoW / 2, neckY, torsoW, torsoH, 14); ctx.fill(); ctx.stroke();
   ui.text(ctx, String(p.n), 0, hipY - torsoH / 2 + 2, { size: 44, color: T.cream, stroke: true, align: 'center', baseline: 'middle' });
 
-  // head: the identity shape
-  ui.playerMark(ctx, p, 0, headY, 26, { numeral: false });
-
-  // shoulder in local space → world, for the arms
-  const shLocal = { x: toKnot * torsoW * 0.4, y: hipY - torsoH + 10 };
+  // head: the identity shape, tipping back off the neck as the cup comes up
+  ctx.save();
+  ctx.translate(0, neckY);
+  ctx.rotate(headAngle(st, toKnot));
+  ui.playerMark(ctx, p, 0, headY - neckY, 26, { numeral: false });
+  ctx.restore();
   ctx.restore();
 
-  const c = Math.cos(lean), s = Math.sin(lean);
-  const sx = shLocal.x / Math.sqrt(sq), sy = shLocal.y * sq;
-  const shWorld = { x: x + sx * c - sy * s, y: gY + sx * s + sy * c };
+  // arms are drawn in world space so the rope hand can reach the rope
+  const shRope = g.toWorld({ x: toKnot * torsoW * 0.4, y: neckY + 10 });
+  const shCup = g.toWorld({ x: -toKnot * torsoW * 0.34, y: neckY + 12 });
+  const hand = g.toWorld(cupHandLocal(g, st, toKnot));
+  const cupC = g.toWorld(cupCentreLocal(g, st, toKnot));
   const gripX = x + toKnot * 70;
+
+  // rope arm — one hand on the rope, always
   ctx.strokeStyle = T.ink; ctx.lineWidth = 14; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(shWorld.x, shWorld.y); ctx.lineTo(gripX, ropeY); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(shWorld.x - toKnot * 10, shWorld.y + 8); ctx.lineTo(gripX - toKnot * 22, ropeY + 4); ctx.stroke();
-  // hands
+  ctx.beginPath(); ctx.moveTo(shRope.x, shRope.y); ctx.lineTo(gripX, ropeY); ctx.stroke();
   ctx.fillStyle = p.color;
-  for (const hx of [gripX, gripX - toKnot * 22]) {
-    ctx.beginPath(); ctx.arc(hx, ropeY + 2, 12, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = 4; ctx.strokeStyle = T.ink; ctx.stroke();
-  }
+  ctx.beginPath(); ctx.arc(gripX, ropeY + 2, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = T.ink; ctx.stroke();
+
+  // cup arm — the elbow swings out at rest and tucks in as the cup comes up
+  ctx.strokeStyle = T.ink; ctx.lineWidth = 14;
+  const ex = (shCup.x + hand.x) / 2 - toKnot * 30 * (1 - st.sip * 0.7);
+  const ey = (shCup.y + hand.y) / 2 + 22;
+  ctx.beginPath(); ctx.moveTo(shCup.x, shCup.y); ctx.quadraticCurveTo(ex, ey, hand.x, hand.y); ctx.stroke();
+
+  // the gripping hand, under the glass — the cup's halo trims it to the rim
+  ctx.fillStyle = p.color;
+  ctx.beginPath(); ctx.arc(hand.x, hand.y, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = T.ink; ctx.stroke();
+
+  // the cup itself, tipping toward the head, level dropping as it empties
+  ui.cupAt(ctx, cupC.x, cupC.y, dp.cupW, dp.cupH, cupAngle(st, toKnot) + g.lean, {
+    pct: d ? d.remainingPct : 1, color: p.color, isDry: !!(d && d.isDry), t: S.time, showBadge: false, halo: dp.haloPx,
+  });
 }
 
 function drawGauges(ctx, safe, gY) {

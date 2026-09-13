@@ -143,6 +143,11 @@ export function render(ctx) {
       : `${game.name.toUpperCase()} NEEDS ${game.minPlayers}–${game.maxPlayers} PLAYERS       DRINK = join     ◂ ▸ = cup size`;
   ui.text(ctx, prompt, safe.cx, promptY, { size: 'small', color: all.length === 0 && !blink ? T.slate : T.ink, align: 'center' });
 
-  // keyboard hint, top-right, quiet
-  ui.text(ctx, 'keys  P1 Q E WASD · P2 , . arrows · P3 U O IJKL · P4 num7 num9 8456 · Esc pause', safe.right - 30, safe.y + T.type.big * 0.95, { size: 'small', color: T.slate, align: 'right' });
+  // keyboard hint — under the header rule, where there is room for the whole
+  // legend. Shows whichever key set is actually live.
+  const tm = input.test();
+  const hint = tm.on
+    ? `TEST KEYS · driving P${tm.driving + 1} · space drink · shift brace · arrows menu · 1-4 switch player · T cabinet keys · F1 panel`
+    : 'keys  P1 Q E WASD · P2 , . arrows · P3 U O IJKL · P4 num7 num9 8456 · Esc pause';
+  ui.text(ctx, hint, safe.x + 30, safe.y + T.type.big * 1.25 + T.type.small * 1.15, { size: 'small', color: tm.on ? T.bottle : T.slate });
 }

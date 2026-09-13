@@ -1,4 +1,7 @@
-// Button-hold backend: converts "drink is held" into a synthetic flow.
+// Button-hold backend — the live one. The cabinet's DRINK button IS the sensor:
+// hold it and the cup pours at syntheticRateMlPerSec, ramped over rampSec so
+// the start of a sip isn't instant.
+//
 // Knows nothing about cups, capacity, rounds or games. One question per frame:
 // how many ml reached this player's mouth since the last frame?
 

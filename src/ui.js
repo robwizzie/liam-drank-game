@@ -185,7 +185,7 @@ export function plate(ctx, x, y, w, h, opts = {}) {
 
 // A cup silhouette (for TOP UP and the launcher). pct fills it. ready drops a coaster on top.
 export function cup(ctx, x, y, w, h, opts = {}) {
-  const { pct = 1, color = T.slate, isDry = false, ready = false, t = 0 } = opts;
+  const { pct = 1, color = T.slate, isDry = false, ready = false, t = 0, showBadge = true, halo = 0 } = opts;
   const taper = w * 0.12;
   ctx.save();
   // body path (tapered tumbler)
@@ -197,6 +197,14 @@ export function cup(ctx, x, y, w, h, opts = {}) {
     ctx.lineTo(x + taper, y + h);
     ctx.closePath();
   };
+  // halo: a cream moat so an identity-coloured cup still reads when it overlaps
+  // an identity-coloured body. Costs nothing on a cream ground.
+  if (halo > 0) {
+    body();
+    ctx.lineWidth = T.gaugeKeylinePx + halo * 2;
+    ctx.strokeStyle = T.cream; ctx.lineJoin = 'round';
+    ctx.stroke();
+  }
   body(); ctx.fillStyle = isDry ? T.cream : T.creamDeep; ctx.fill();
   if (!isDry && pct > 0) {
     const low = pct < T.lowPct;
@@ -217,7 +225,17 @@ export function cup(ctx, x, y, w, h, opts = {}) {
     roundRect(ctx, x - w * 0.12, y - h * 0.09, w * 1.24, h * 0.13, 6); ctx.fill();
     ctx.strokeStyle = T.ink; ctx.lineWidth = config.players.keylinePx; ctx.stroke();
   }
-  if (isDry) badge(ctx, 'DRY', x + w / 2, y + h * 0.5);
+  if (isDry && showBadge) badge(ctx, 'DRY', x + w / 2, y + h * 0.5);
+  ctx.restore();
+}
+
+// The same tumbler, centred on (cx, cy) and rotated — a cup held in a hand.
+// Pass showBadge: false; a DRY badge on a hand-sized cup is unreadable.
+export function cupAt(ctx, cx, cy, w, h, angle, opts = {}) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(angle);
+  cup(ctx, -w / 2, -h / 2, w, h, opts);
   ctx.restore();
 }
 

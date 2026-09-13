@@ -22,10 +22,30 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keysDown.delete(e.code); });
 window.addEventListener('blur', () => keysDown.clear());
 
+const testCfg = config.input.test;
+const testKeys = new Set(Object.values(testCfg.map));
+let testOn = !!testCfg.enabled;
+let driving = 0;   // which keyboard slot the test keys reach
+
 function isGameKey(code) {
   if (config.input.pauseKeys.includes(code)) return true;
+  if (testKeys.has(code) || testCfg.toggleKeys.includes(code) || testCfg.driveKeys.includes(code)) return true;
   return config.input.keyboard.some(k => Object.values(k).includes(code));
 }
+
+function isDown(code) { return keysDown.has(code) || keysLatched.has(code); }
+function justTapped(code) { return keysLatched.has(code); }   // keydown ignores auto-repeat, so this is a rising edge
+
+// The laptop test rig: which player the simple key set is driving right now.
+export function test() {
+  return { on: testOn, driving, map: testCfg.map, driveKeys: testCfg.driveKeys };
+}
+
+export function setTestDriving(n) {
+  if (n >= 0 && n < config.input.keyboard.length) driving = n;
+}
+
+export function setTestMode(on) { testOn = !!on; }
 
 // ---- mappings (same schema as gamepad-test.html) --------------------------
 
@@ -88,17 +108,28 @@ export function poll() {
   pausePrev = pauseCur;
   pauseCur = false;
 
+  // test rig: toggle, and pick who the simple key set drives
+  for (const k of testCfg.toggleKeys) if (justTapped(k)) testOn = !testOn;
+  if (testOn) testCfg.driveKeys.forEach((code, n) => { if (justTapped(code)) driving = n; });
+
   // keyboard virtual devices
   config.input.keyboard.forEach((map, n) => {
     const key = 'kb:' + n;
     seen.add(key);
     const d = ensureDevice(key, 'keyboard', 'Keyboard ' + (n + 1), n);
     swap(d);
-    for (const a of ACTIONS) if (map[a] && (keysDown.has(map[a]) || keysLatched.has(map[a]))) d.cur.add(a);
+    const driven = testOn && n === driving;
+    for (const a of ACTIONS) {
+      const code = map[a];
+      // a cabinet key that the test rig has claimed only reaches the driven player
+      if (!code || (testOn && testKeys.has(code) && !driven)) continue;
+      if (isDown(code)) d.cur.add(a);
+    }
+    if (driven) for (const a of ACTIONS) { const code = testCfg.map[a]; if (code && isDown(code)) d.cur.add(a); }
     d.x = (d.cur.has('right') ? 1 : 0) - (d.cur.has('left') ? 1 : 0);
     d.y = (d.cur.has('down') ? 1 : 0) - (d.cur.has('up') ? 1 : 0);
   });
-  for (const k of config.input.pauseKeys) if (keysDown.has(k) || keysLatched.has(k)) pauseCur = true;
+  for (const k of config.input.pauseKeys) if (isDown(k)) pauseCur = true;
   keysLatched.clear();
 
   // gamepads

@@ -12,6 +12,8 @@ here, the doc changes first.
 liam-drank-game/
 ├── index.html                # the cabinet app: one <canvas>, one <script type="module" src="src/main.js">
 ├── gamepad-test.html         # standalone diagnostic; zero imports from src/ (gate 2)
+├── start.sh                  # serve + open a browser; the laptop entry point
+├── start.command             # the same, double-clickable in Finder
 ├── README.md
 ├── docs/
 │   ├── ARCHITECTURE.md       # this file
@@ -29,7 +31,8 @@ liam-drank-game/
     ├── rounds.js             # round lifecycle state machine, scoreboard, TOP UP
     ├── fx.js                 # shake, pooled particles, tweens/easing, callout banners
     ├── audio.js              # WebAudio synth palette, per-player pitch
-    ├── ui.js                 # shared drawing: fuel gauge (ring/bar/segment), DRY badge, type helpers
+    ├── ui.js                 # shared drawing: fuel gauge (ring/bar/segment), DRY badge, cup, type helpers
+    ├── debug.js              # the on-screen test panel (config.debug.toggleKeys); laptop only
     ├── launcher.js           # game select + player registration screen
     └── games/
         ├── index.js          # registry: `export default [tugofwar, auction, bloom]`  ← the "one launcher entry"
@@ -42,9 +45,10 @@ Adding a fourth game = add `src/games/foo.js` + one line in `src/games/index.js`
 Anything else is an abstraction failure and gets fixed in the shared module,
 not worked around in the game.
 
-Serving: `file://` works in Firefox; Chrome blocks ES modules over `file://`,
-so run any static server (`npx http-server .` or `python3 -m http.server`).
-No build step either way.
+Serving: `./start.sh` (or double-click `start.command`) picks the first free
+port from 8080, serves the folder and opens the browser. `file://` works in
+Firefox; Chrome blocks ES modules over `file://`, so any static server does
+(`npx http-server .` or `python3 -m http.server`). No build step either way.
 
 ---
 
@@ -61,7 +65,8 @@ main.js loop (rAF, dt clamped to 50ms):
   fx.applyShake(ctx)
   screen.render(ctx, W, H)
   fx.render(ctx)                     // particles + callouts, always on top
-  pause.render(ctx)                  // dim + PAUSED, drawn last so it works from any state
+  pause.render(ctx)                  // dim + PAUSED, so it works from any state
+  debug.render(ctx)                  // the test panel, truly last; sits over pause too
   canvas.end(ctx)
 ```
 
@@ -119,12 +124,32 @@ export function justReleased(slot, action) → bool
 export function axis(slot)             → { x: -1..1, y: -1..1 }   // dpad/hat/stick unified
 export function anyJustPressed(action) → slot | null              // for "press DRINK to join"
 export function loadMappings() / saveMappings(obj)                 // localStorage, same schema as gamepad-test.html
+export function test() → { on, driving, map, driveKeys }          // the laptop test rig, below
+export function setTestMode(on) / setTestDriving(n)
 ```
 
 Mapping resolution per gamepad: `byIndex[gp.index]` → `byId[gp.id]` →
 standard-mapping default (if `gp.mapping === 'standard'`) → unmapped (device
 listed, but can't join). Schema is defined by `gamepad-test.html` and documented
 in its Saved Mappings panel.
+
+**Laptop test rig** (`config.input.test`, on by default — set `enabled: false`
+for the cabinet). One simple key set reaches exactly one keyboard slot at a
+time, so a single person can join, drive and play every player in turn:
+
+| key | action |
+|-----|--------|
+| `Space` | drink |
+| `ShiftLeft` | action |
+| arrows | up / down / left / right |
+| `1` `2` `3` `4` | choose which keyboard slot the set drives |
+| `T` | toggle the rig off and back on |
+
+A key that appears in `test.map` reaches **only** the driven slot while the rig
+is on, so P2's arrows go quiet unless you are driving P2 — otherwise one arrow
+press would move two players. Nothing else about the device model changes: the
+rig writes into the same `kb:n` virtual devices, so joining, binding and every
+per-slot read work exactly as they do on the cabinet.
 
 Keyboard slots 0–3 are fixed in `config.input.keyboard`:
 
@@ -154,6 +179,9 @@ export function update(dt);
 export function beginRound(slots);       // zero `total`; does NOT refill
 export function refill(slot);            // remaining = capacityMl   (TOP UP only)
 export function setCapacity(slot, ml);
+export function setRemaining(slot, ml);  // DEBUG/TOOLS ONLY — the test panel's FILL/EMPTY.
+                                         // Games and rounds.js go through refill(), so TOP UP stays
+                                         // the only way a cup gets fuller during a match.
 export function diminish(rate, params = config.drink.diminish) → number   // the shared curve, exposed for games with custom params
 export { backend };                      // the ONE named export a sensor source replaces
 ```
@@ -169,6 +197,10 @@ export default {
   stop(),
 }
 ```
+
+**Today the DRINK button *is* the sensor.** There is no flow hardware, and
+`button-hold.js` is the live backend, not a placeholder: holding the button
+pours, and the game shows a figure lifting its cup and drinking.
 
 `button-hold.js` reads `input.held(slot, 'drink')`, ramps a synthetic rate up
 over `rampSec`, returns `rate * dt`. `flow-sensor.js` will count pulses from a
@@ -245,6 +277,7 @@ export default {
   update(dt, inputs) → undefined | RoundResult,
   render(ctx, w, h),                   // logical units, safe-area aware via canvas.safe()
   teardown(),                          // stop loops, release audio nodes
+  debugRows?() → [{ slot?, text }],    // optional; read by debug.js when the test panel is open
 }
 
 // inputs — array indexed by slot; only joined slots are populated
@@ -295,6 +328,10 @@ export function gauge(ctx, { kind: 'ring'|'bar'|'segment', x, y, w, h, r, pct, c
 export function badge(ctx, text, x, y, opts);
 export function text(ctx, str, x, y, { size: 'hero'|'title'|'big'|'label'|'small', align, color, stroke });
 export function playerMark(ctx, player, x, y, r);   // identity: colour + numeral + shape, used by every game
+export function cup(ctx, x, y, w, h, { pct, color, isDry, ready, t, showBadge, halo });
+export function cupAt(ctx, cx, cy, w, h, angle, opts);   // the same cup, centred and rotated — a cup in a hand
+   // halo: a cream moat around the cup so an identity-coloured cup still reads
+   // against an identity-coloured body. showBadge: false for hand-sized cups.
 ```
 
 ---
@@ -327,5 +364,25 @@ Yes, with two additions that live entirely inside `drink.js` and `config.js`:
 - **A rate floor** (`rateFloorMlPerSec`) so `isDrinking` flips cleanly instead of trailing off.
 
 Tug of War reads only `inputs[slot].drink.{effective, rate, isDry, isDrinking, remainingPct}` and never touched `input.js`. The `'drink'` action is unreachable from game code (the guard in `main.js` throws). Nothing in the game module knows whether the ml came from a button or a sensor. The flow-sensor backend can be dropped in by changing one import line.
+
+## Gate 5b verdict: the button, and testing without the cabinet
+
+Two changes, neither of which touched the drink contract:
+
+- **The drink reads as a drink.** Tug of War's figures hold their cup in the
+  free hand; `drink.isDrinking` drives one `sip` value per player and the whole
+  pose — cup up beside the head, head tipped back off the neck, cup tipping,
+  gulp droplets off the rim — falls out of that single lerp. The cup is drawn
+  with `ui.cupAt` and a cream halo, because a player-coloured cup in front of a
+  player-coloured body is otherwise one silhouette. The game still reads only
+  `inputs[slot].drink`; it never learned where the ml came from.
+- **`debug.js` and the input test rig** are additive. The panel is a renderer
+  plus `drink.setRemaining`; the rig writes into the existing `kb:n` devices
+  rather than inventing a fifth device kind, so `players.join`, `bindDevice` and
+  every per-slot read are unchanged and the cabinet path is untouched with
+  `input.test.enabled: false`.
+
+`debugRows()` is the one new seam in the game-module contract, and it is
+optional — a game without it simply shows no game section in the panel.
 
 One thing to watch for Auction Blitz: it wants `total` per round, which is reset by `drink.beginRound()` — already there. Bloom wants per-frame ml deltas for growth; `rate * dt` gives that without a new field.
