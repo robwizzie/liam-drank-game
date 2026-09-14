@@ -15,8 +15,9 @@ Plain HTML + JS + Canvas 2D. No build step, no framework, no dependencies.
 | 4 | Shared systems + Tug of War, keyboard-playable | done |
 | 5 | Tug of War, final visuals + audio | done, awaiting play test |
 | 5b | Drink button reads as a drink; laptop test rig | done |
-| 6 | Auction Blitz | not started |
-| 7 | Bloom | not started |
+| 6 | Auction Blitz | done, awaiting play test |
+| 7 | Bloom | done, awaiting play test |
+| — | Cabinet controller layout (A = drink) | done; real button check pending |
 
 ## Testing on a laptop
 
@@ -62,12 +63,51 @@ Nothing above `src/drink-backends/button-hold.js` knows it was a button. When
 the sensor exists, change one import line in `src/drink.js` and every game,
 gauge and cup keeps working.
 
+## The three games
+
+**Tug of War.** Two sides, one rope. Hold DRINK to pull, hold ACTION to brace.
+When you're dry you brace automatically, harder. First side to drag the knot to
+its post takes the round; best of 3.
+
+**Auction Blitz.** An item with a value goes up top. Hold DRINK and your cup
+pours into your bid glass, in public. Fullest glass when the ring runs out
+takes the item; everyone else drank their bid for nothing. Tap ACTION to fold
+for a consolation point. Some items are duds (worth 0) and some are bar tabs
+(the winner *pays*), so read the card. Once you're dry you hold one **VETO**:
+hold ACTION during a round and the top bid on that round is void, next one
+down wins. Seven items, most points wins.
+
+**Bloom.** An arena of thick walls and narrow doors. Drinking grows you; bigger
+eats smaller on contact; you never shrink. Stick moves, ACTION dashes. The
+left pocket's doors only fit a fresh-sized body, the right loop's doors fit a
+body about twice that. Dry players lock at their size, so small-and-dry keeps
+every door. Points for seconds survived, for eating, and for size at the bell.
+Three rounds, most points wins.
+
+Every game: sustained chugging counts for less than sipping in bursts.
+
 ## Playing on the cabinet
 
+The sticks are read in the cabinet's own controller vocabulary (the W3C
+standard gamepad layout, the same one its controller layer uses):
+
+| cabinet button | in the games |
+|----------------|--------------|
+| **A** (button 0) | DRINK — hold it and your cup pours |
+| **B** (button 1) | ACTION — brace / fold / veto / dash / start / ready |
+| **START** (button 9) | PAUSE, from anywhere |
+| d-pad or left stick | menus, cup size, moving in Bloom |
+
+That assignment is three words in `src/config.js` under `input.cabinet.actions`
+(`drink: 'a', action: 'b', pause: 'start'`); swap them when the real buttons
+are known. A stick whose encoder disagrees with the standard layout gets a
+saved binding from `gamepad-test.html`, which overrides the layout for that
+stick only. Taps shorter than a frame still land: pads are edge-polled in the
+background, like the cabinet layer does.
+
 Press **DRINK** to join, ◂ ▸ for cup size, ▴ ▾ for the game, **ACTION** to
-start. In a round: hold **DRINK** to pull, hold **ACTION** to brace. When
-you're dry you brace automatically, harder. At TOP UP, tap ACTION to go into
-the next round as you are, or hold it to refill. **PAUSE** works from anywhere.
+start. At TOP UP, tap ACTION to go into the next round as you are, or hold it
+to refill. **PAUSE** works from anywhere.
 
 Four keyboard layouts stand in for the four cabinet sticks:
 
