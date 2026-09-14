@@ -128,10 +128,19 @@ export function test() → { on, driving, map, driveKeys }          // the lapto
 export function setTestMode(on) / setTestDriving(n)
 ```
 
-Mapping resolution per gamepad: `byIndex[gp.index]` → `byId[gp.id]` →
-standard-mapping default (if `gp.mapping === 'standard'`) → unmapped (device
-listed, but can't join). Schema is defined by `gamepad-test.html` and documented
-in its Saved Mappings panel.
+Mapping resolution per gamepad: `byIndex[gp.index]` → `byId[gp.id]` → the
+**cabinet layout** (`config.input.cabinet`: W3C standard indices in the
+cabinet controller layer's vocabulary — `a b x y l r lz rz coin start` plus
+d-pad buttons 12–15 and the left stick as a fallback for the directions).
+With `assumeForAllPads: true` every pad gets the layout whatever mapping string
+it reports; a saved binding only exists to override one misbehaving encoder.
+`cabinet.actions` names which button is which game action (`drink: 'a'`,
+`action: 'b'`, `pause: 'start'`); that is the one place to change when the
+real buttons are known. A binding may be a list of alternatives (button OR
+axis); the strongest wins. Pads are also edge-polled on a background timer
+(`pollIntervalMs`) so a tap between two frames is latched and delivered on
+the next `poll()`, matching the cabinet layer's own event queue. Schema is
+defined by `gamepad-test.html` and documented in its Saved Mappings panel.
 
 **Laptop test rig** (`config.input.test`, on by default — set `enabled: false`
 for the cabinet). One simple key set reaches exactly one keyboard slot at a
@@ -183,6 +192,7 @@ export function setRemaining(slot, ml);  // DEBUG/TOOLS ONLY — the test panel'
                                          // Games and rounds.js go through refill(), so TOP UP stays
                                          // the only way a cup gets fuller during a match.
 export function diminish(rate, params = config.drink.diminish) → number   // the shared curve, exposed for games with custom params
+export function fatigueTracker(params) → { update(dt, drinking) → mul, value, mul }   // the "chugging pays less" rail; one per player per game
 export { backend };                      // the ONE named export a sensor source replaces
 ```
 
@@ -278,6 +288,8 @@ export default {
   render(ctx, w, h),                   // logical units, safe-area aware via canvas.safe()
   teardown(),                          // stop loops, release audio nodes
   debugRows?() → [{ slot?, text }],    // optional; read by debug.js when the test panel is open
+  playAllRounds?: true,                // optional; points games play every round instead of finishing on a majority of round wins
+  matchSummary?(board, players) → { winners, banner },   // optional; default is most points
 }
 
 // inputs — array indexed by slot; only joined slots are populated
@@ -386,3 +398,23 @@ Two changes, neither of which touched the drink contract:
 optional — a game without it simply shows no game section in the panel.
 
 One thing to watch for Auction Blitz: it wants `total` per round, which is reset by `drink.beginRound()` — already there. Bloom wants per-frame ml deltas for growth; `rate * dt` gives that without a new field.
+
+## Gates 6–7: Auction Blitz and Bloom
+
+Both games were written against the contract as it stood after gate 5b. Three
+things changed in shared code, none of them a workaround:
+
+- **`rounds.js`** gained the optional `playAllRounds` flag. The majority-of-rounds
+  early finish is a Tug of War rule; a points game (an auction with negative
+  items, an arena game scored on survival) has to play out.
+- **`drink.js`** gained `fatigueTracker(params)`, the sustained-flow rail as a
+  reusable helper. Tug of War keeps its own inline copy, already tuned.
+- **`audio.js`** gained the two games' palettes: `bidTick`, `sold`, `fold`,
+  `void`, `eat`, `bump`, `dash`.
+
+Auction Blitz reads `inputs[slot].drink.{effective, isDrinking, isDry,
+remainingPct, rate}`; the bid is `∫ effective · fatigue`. Bloom reads the same
+fields and grows by area (`r = √(r² + ml · growthAreaPerMl)`), so radius has a
+natural diminishing return on top of fatigue. Neither touched `input.js`.
+Vetoes in Auction live in the game module across rounds and reset on round 1
+of a match, which `rounds.roundNumber()` already exposes.

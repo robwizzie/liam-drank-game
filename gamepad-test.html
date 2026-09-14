@@ -124,7 +124,7 @@
 
 <section>
   <h2>Saved mappings</h2>
-  <p class="muted" style="margin-top:0">Stored under <code>cabinet.gamepadMappings.v1</code>. The game's <code>input.js</code> reads exactly this. Resolution order: <b>by index</b> → <b>by id</b> → browser "standard" layout if the pad reports one.</p>
+  <p class="muted" style="margin-top:0">Stored under <code>cabinet.gamepadMappings.v1</code>. The game's <code>input.js</code> reads exactly this. Resolution order: <b>by index</b> → <b>by id</b> → the cabinet layout (A = drink, B = action, START = pause, d-pad or left stick). A saved binding only matters when a stick's encoder disagrees with that layout.</p>
   <div id="mappings"></div>
   <div class="row" style="margin-top:12px">
     <button id="export">Show JSON</button>
@@ -152,15 +152,18 @@
     { key: 'left',   label: 'LEFT',   hint: 'Push the stick', dir: true },
     { key: 'right',  label: 'RIGHT',  hint: 'Push the stick', dir: true },
   ];
-  // W3C "standard" layout fallback, only used when gp.mapping === 'standard'
-  const STANDARD = {
-    drink:  { type: 'button', index: 0 },
-    action: { type: 'button', index: 1 },
-    pause:  { type: 'button', index: 9 },
-    up:     { type: 'button', index: 12 },
-    down:   { type: 'button', index: 13 },
-    left:   { type: 'button', index: 14 },
-    right:  { type: 'button', index: 15 },
+  // The cabinet's layout (its controller layer's STANDARD_ARCADE_MAPPING):
+  // W3C "standard" indices, A = drink, B = action, START = pause, d-pad or
+  // left stick for the directions. Applied to every pad with no saved binding.
+  // Keep in step with config.input.cabinet in src/config.js.
+  const CABINET = {
+    drink:  { type: 'button', index: 0 },    // A
+    action: { type: 'button', index: 1 },    // B
+    pause:  { type: 'button', index: 9 },    // START
+    up:     [{ type: 'button', index: 12 }, { type: 'axis', index: 1, sign: -1, rest: 0 }],
+    down:   [{ type: 'button', index: 13 }, { type: 'axis', index: 1, sign: 1, rest: 0 }],
+    left:   [{ type: 'button', index: 14 }, { type: 'axis', index: 0, sign: -1, rest: 0 }],
+    right:  [{ type: 'button', index: 15 }, { type: 'axis', index: 0, sign: 1, rest: 0 }],
   };
 
   // ---- storage -----------------------------------------------------------
@@ -180,13 +183,13 @@
   function resolveMapping(gp) {
     if (store.byIndex[gp.index]) return { source: 'index ' + gp.index, map: store.byIndex[gp.index].actions };
     if (store.byId[gp.id]) return { source: 'id', map: store.byId[gp.id].actions };
-    if (gp.mapping === 'standard') return { source: 'standard', map: STANDARD };
-    return { source: null, map: null };
+    return { source: 'cabinet layout', map: CABINET };
   }
 
   // The runtime rule. input.js will use the same function.
   function bindingActive(gp, b) {
     if (!b) return false;
+    if (Array.isArray(b)) return b.some(x => bindingActive(gp, x));
     if (b.type === 'button') {
       const btn = gp.buttons[b.index];
       return !!btn && (btn.pressed || btn.value > 0.5);

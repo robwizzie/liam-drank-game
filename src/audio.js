@@ -118,6 +118,39 @@ export function play(name, opts = {}) {
     case 'creak':
       voice([{ f: 70 + Math.random() * 30, f2: 50, t: 0, d: 0.12, type: 'sawtooth', g: 0.12 }]);
       break;
+    // ---- Auction Blitz ----
+    case 'bidTick': {
+      // the final-stretch tick: each step a minor third higher
+      const step = opts.step ?? 0;
+      voice([{ f: 660 * Math.pow(1.19, step), t: 0, d: 0.07, type: 'triangle', g: 0.55 }]);
+      break;
+    }
+    case 'sold':
+      // the gavel: a knock, then a bright two-note
+      noise(0, 0.12, 0.6, 1400);
+      voice([{ f: 160, f2: 60, t: 0, d: 0.18, type: 'sine', g: 0.8 }, { f: 880, t: 0.06, d: 0.22, type: 'square', g: 0.25 }, { f: 1320, t: 0.14, d: 0.3, type: 'square', g: 0.2 }]);
+      break;
+    case 'fold':
+      // a coaster dropped on a glass
+      noise(0, 0.05, 0.3, 800);
+      voice([{ f: p * 0.8, f2: p * 0.6, t: 0, d: 0.12, type: 'triangle', g: 0.4 }]);
+      break;
+    case 'void':
+      noise(0, 0.3, 0.8, 500);
+      voice([{ f: 80, f2: 30, t: 0, d: 0.4, type: 'sawtooth', g: 0.7 }]);
+      break;
+    // ---- Bloom ----
+    case 'eat':
+      noise(0, 0.1, 0.6, 1800);
+      voice([{ f: p * 2, f2: p * 0.7, t: 0, d: 0.25, type: 'square', g: 0.45 }]);
+      break;
+    case 'bump':
+      voice([{ f: 140, f2: 90, t: 0, d: 0.08, type: 'sine', g: 0.35 }]);
+      break;
+    case 'dash':
+      noise(0, 0.12, 0.35, 3000);
+      voice([{ f: p * 1.5, f2: p * 3, t: 0, d: 0.12, type: 'triangle', g: 0.3 }]);
+      break;
     default:
       voice([{ f: p, t: 0, d: 0.1 }]);
   }

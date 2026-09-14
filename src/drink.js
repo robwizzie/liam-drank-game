@@ -48,6 +48,26 @@ export function forget(slot) { states.delete(slot); }
 
 export function start() { backend.start(); }
 
+// Sustained-flow fatigue: the shared "chugging pays less" rail. A game keeps
+// one tracker per player and multiplies that player's drink effect by `mul`.
+// Past `onsetSec` of continuous drinking the multiplier slides toward `floor`;
+// off the button it recovers. Tug of War carries its own copy of this curve.
+export function fatigueTracker(params) {
+  const f = { value: 0, drinkTime: 0, mul: 1 };
+  f.update = (dt, drinking) => {
+    if (drinking) {
+      f.drinkTime += dt;
+      if (f.drinkTime > params.onsetSec) f.value = Math.min(1, f.value + params.riseRate * dt);
+    } else {
+      f.drinkTime = 0;
+      f.value = Math.max(0, f.value - params.recoverRate * dt);
+    }
+    f.mul = 1 - f.value * (1 - params.floor);
+    return f.mul;
+  };
+  return f;
+}
+
 export function diminish(rate, params = config.drink.diminish) {
   const { kneeMlPerSec, exponent } = params;
   if (rate <= kneeMlPerSec) return rate;

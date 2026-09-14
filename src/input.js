@@ -65,19 +65,36 @@ export function saveMappings(obj) {
   localStorage.setItem(config.input.storageKey, JSON.stringify(obj));
 }
 
+// The cabinet's own layout (config.input.cabinet), built once into the same
+// binding shape gamepad-test.html saves. Directions accept the d-pad buttons OR
+// the left stick, exactly like the cabinet's controller layer.
+const CAB = config.input.cabinet;
+const CABINET_MAP = (() => {
+  const b = CAB.buttons, ax = CAB.stickAxes;
+  const m = {};
+  for (const [action, name] of Object.entries(CAB.actions)) m[action] = { type: 'button', index: b[name] };
+  m.up = [{ type: 'button', index: b.up }, { type: 'axis', index: ax.y, sign: -1, rest: 0 }];
+  m.down = [{ type: 'button', index: b.down }, { type: 'axis', index: ax.y, sign: 1, rest: 0 }];
+  m.left = [{ type: 'button', index: b.left }, { type: 'axis', index: ax.x, sign: -1, rest: 0 }];
+  m.right = [{ type: 'button', index: b.right }, { type: 'axis', index: ax.x, sign: 1, rest: 0 }];
+  return m;
+})();
+
 function resolveMapping(gp) {
   if (mappings.byIndex[gp.index]) return mappings.byIndex[gp.index].actions;
   if (mappings.byId[gp.id]) return mappings.byId[gp.id].actions;
-  if (gp.mapping === 'standard') return config.input.standardMapping;
+  if (CAB.assumeForAllPads || gp.mapping === 'standard') return CABINET_MAP;
   return null;
 }
 
+// A binding is one {type:'button'|'axis'} or a list of alternatives; the strongest wins.
 function bindingStrength(gp, b) {
   if (!b) return 0;
+  if (Array.isArray(b)) { let m = 0; for (const x of b) m = Math.max(m, bindingStrength(gp, x)); return m; }
   if (b.type === 'button') {
     const btn = gp.buttons[b.index];
     if (!btn) return 0;
-    return (btn.pressed || btn.value > 0.5) ? 1 : 0;
+    return (btn.pressed || btn.value >= 0.5) ? 1 : 0;
   }
   if (b.type === 'axis') {
     const v = gp.axes[b.index];
@@ -91,6 +108,33 @@ function bindingStrength(gp, b) {
   }
   return 0;
 }
+
+// ---- gamepad edge latching -------------------------------------------------
+// The rAF loop polls pads once a frame; a tap shorter than a frame would be
+// lost. Like the cabinet's controller layer, a background timer watches for
+// rising edges and latches them until the next poll() consumes them.
+const gpLatched = new Map();   // gp.index -> Set(actions) that rose since the last poll()
+const gpEdgePrev = new Map();  // gp.index -> Set(actions) active at the last edge sample
+
+function pollEdges() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (let i = 0; i < pads.length; i++) {
+    const gp = pads[i];
+    if (!gp) continue;
+    const map = resolveMapping(gp);
+    if (!map) continue;
+    let prev = gpEdgePrev.get(gp.index);
+    if (!prev) { prev = new Set(); gpEdgePrev.set(gp.index, prev); }
+    let lat = gpLatched.get(gp.index);
+    if (!lat) { lat = new Set(); gpLatched.set(gp.index, lat); }
+    for (const a of ACTIONS) {
+      const on = bindingStrength(gp, map[a]) > 0;
+      if (on && !prev.has(a)) lat.add(a);
+      if (on) prev.add(a); else prev.delete(a);
+    }
+  }
+}
+if (CAB.pollIntervalMs > 0 && typeof navigator !== 'undefined') setInterval(pollEdges, CAB.pollIntervalMs);
 
 // ---- polling ---------------------------------------------------------------
 
@@ -145,15 +189,17 @@ export function poll() {
     d.mapped = !!map;
     if (!map) continue;
     let x = 0, y = 0;
+    const lat = gpLatched.get(gp.index);
     for (const a of ACTIONS) {
       const s = bindingStrength(gp, map[a]);
-      if (s > 0) d.cur.add(a);
+      if (s > 0 || (lat && lat.has(a))) d.cur.add(a);
       if (a === 'left') x -= s; else if (a === 'right') x += s;
       else if (a === 'up') y -= s; else if (a === 'down') y += s;
     }
     d.x = Math.max(-1, Math.min(1, x));
     d.y = Math.max(-1, Math.min(1, y));
     if (d.cur.has('pause')) pauseCur = true;
+    if (lat) lat.clear();
   }
 
   // drop vanished devices, unbinding their slot

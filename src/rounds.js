@@ -141,6 +141,8 @@ function endRound(result) {
 function matchDecided() {
   const played = S.round + 1;
   if (played >= S.total) return true;
+  // points games (Auction Blitz, Bloom) play every round; only team/round games finish on a majority
+  if (S.game.playAllRounds) return false;
   // early finish: someone has a majority of rounds
   const need = Math.floor(S.total / 2) + 1;
   for (const v of S.roundsWon.values()) if (v >= need) return true;

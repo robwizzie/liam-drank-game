@@ -33,14 +33,14 @@ export default {
       // key in `map` only reaches the player being driven, so P2 keeps , and .
       // but loses the arrows until you drive P2 or press the toggle key.
     },
-    standardMapping: {      // W3C "standard" layout fallback when a pad reports mapping === 'standard' and has no saved binding
-      drink: { type: 'button', index: 0 },
-      action: { type: 'button', index: 1 },
-      pause: { type: 'button', index: 9 },
-      up: { type: 'button', index: 12 },
-      down: { type: 'button', index: 13 },
-      left: { type: 'button', index: 14 },
-      right: { type: 'button', index: 15 },
+    cabinet: {              // the arcade sticks, in the cabinet's own vocabulary (its controller layer's STANDARD_ARCADE_MAPPING)
+      // Physical layout: W3C "standard" gamepad indices, exactly as the cabinet's controller code expects them.
+      buttons: { a: 0, b: 1, x: 2, y: 3, l: 4, r: 5, lz: 6, rz: 7, coin: 8, start: 9, up: 12, down: 13, left: 14, right: 15 },
+      stickAxes: { x: 0, y: 1 },   // left-stick fallback for the four directions, same as the cabinet layer
+      // Which cabinet button does what in the games. Change a word here, nothing else moves.
+      actions: { drink: 'a', action: 'b', pause: 'start' },
+      assumeForAllPads: true,      // apply this layout to any pad with no saved gamepad-test.html binding, whatever mapping string it reports
+      pollIntervalMs: 4,           // background edge polling, like the cabinet layer: a tap shorter than a frame still lands
     },
   },
 
@@ -181,6 +181,82 @@ export default {
         braceSquash: 0.78,      // vertical scale of a bracing figure
       },
       ropeSagPx: 34,            // how far the rope droops at zero tension; 0 = always taut
+    },
+
+    auction: {
+      rounds: 7,                // items on the block; every round is played, points decide
+      bidTimeSec: 10,           // seconds of bidding per item; longer = more room to bluff, more drunk per round
+      escalateSec: 3,           // the final stretch: ring goes brass, the card grows, ticks climb
+      cardGrow: 1.1,            // how much the item card swells in the final stretch
+      glassFullMl: 120,         // a bid glass reads full at this many ml; ≈ one uninterrupted button hold per round
+      minBidMl: 1,              // a bid below this counts as no bid at all
+      foldConsolation: 1,       // points for folding; the "sit this one out" score
+      vetoHoldSec: 0.7,         // a dry player holds ACTION this long to spend a veto; a tap is a fold
+      vetoesPerDry: 1,          // vetoes a player is handed the first time they go dry in a match
+      values: [5, 10, 15, 20, 25, 30],   // item values, drawn uniformly once the dud / tab roll misses
+      dudChance: 0.12,          // chance an item is worth nothing; higher = blind max-bidding punished more often
+      tabChance: 0.12,          // chance the item is a bar tab that COSTS the winner; drawn from `tabs`
+      tabs: [-10, -15, -20],
+      firstRoundSafe: true,     // round 1 is never a dud or a tab so the room learns the game on a real item
+      resolve: {
+        voidGapSec: 0.5,        // seconds between each VOID stamp when vetoes fire
+        soldDelaySec: 0.45,     // pause before the SOLD stamp lands
+        holdSec: 0.9,           // how long SOLD sits before the round-end banner takes over
+      },
+      pour: {                   // the player's cup tipping into the bid glass
+        cupW: 58,
+        cupH: 76,
+        tiltDeg: 62,            // how far the cup tips at a full pour
+        raiseSec: 0.14,         // seconds for the cup to tip / right itself
+        streamPx: 12,           // width of the pour stream
+        splashEverySec: 0.07,   // seconds between splash droplets at the surface while pouring
+      },
+      fatigue: {                // sustained bidding counts for less: sip in bursts, don't chug the round
+        onsetSec: 3,            // seconds of continuous drinking before the bid starts to shrink
+        riseRate: 0.5,          // fatigue per second past onset; higher = faster punishment
+        recoverRate: 0.8,       // fatigue shed per second off the button; higher = shorter breather
+        floor: 0.4,             // minimum bid multiplier at full fatigue; 0 = chugging pours nothing
+      },
+    },
+
+    bloom: {
+      rounds: 3,                // every round is played, points decide
+      roundTimeSec: 75,         // seconds per round; a round also ends when one player is left
+      startRadius: 28,          // px; the gap sizes below are in units of this
+      maxRadius: 150,           // px; growth caps here however much you drink
+      growthAreaPerMl: 24,      // px² of body per ml; radius grows as the square root, so big players grow slower per sip
+      speedMax: 520,            // px/sec at the start radius
+      speedFalloffExp: 0.6,     // speed = speedMax · (startRadius / radius)^this; higher = size costs more speed
+      accel: 9,                 // per-second approach to the wanted velocity; higher = twitchier, lower = weightier
+      eatRatio: 1.2,            // you must be this many times the other's radius to eat them
+      eatOverlap: 0.6,          // fraction of the small body's width that must be inside the big one before the bite lands; 0.5 = its centre crosses the edge
+      eatGrowthFrac: 0.5,       // fraction of the eaten body's area the eater gains
+      dash: {                   // the stick's second job: ACTION lunges. Dry players keep it.
+        mul: 2.2,               // dash speed as a multiple of current speed
+        sec: 0.18,              // dash duration
+        cooldownSec: 1.6,       // seconds between dashes
+      },
+      wallPx: 28,               // wall thickness
+      gaps: {                   // authored gap widths in start-radius units: the biggest body that fits through
+        smallRadii: 1.3,        // the left pocket: a fresh player, a sip more, nothing bigger
+        medRadii: 2.3,          // the right loop's doors
+        corridorRadii: 2.6,     // the right loop's corridor
+        clearPx: 8,             // extra slack on every gap so the fit is a squeeze, not a pixel fight
+      },
+      score: {
+        eatPoints: 5,           // per body eaten
+        survivalSecPerPoint: 5, // one point per this many seconds alive
+        sizePoints: 10,         // points for a max-radius survivor at the bell, scaled by radius
+      },
+      fatigue: {                // sustained drinking grows less: the chug rail
+        onsetSec: 3,
+        riseRate: 0.5,
+        recoverRate: 0.8,
+        floor: 0.4,
+      },
+      ring: { gapPx: 12, widthPx: 10 },   // the fuel ring around each body
+      cupIcon: { w: 32, h: 42, tiltDeg: 55, raiseSec: 0.16 },   // the little cup that tips at the body's shoulder while drinking
+      bump: { minSpeed: 220, everySec: 0.25 },   // wall thumps: how hard you must hit, and how often it can sound
     },
   },
 };
